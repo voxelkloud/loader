@@ -1,17 +1,14 @@
 {
   "name": "@voxelkloud/loader",
   "version": "0.1.0",
-  "description": "Streaming loader for Potree v2 point cloud data (metadata.json/hierarchy.bin/octree.bin) over HTTP Range requests.",
+  "description": "Streaming point cloud loader over HTTP Range requests. No three.js and no DOM in its module graph, so it runs in a worker or in Node.",
   "license": "MIT",
   "keywords": [
     "point-cloud",
-    "potree",
     "lidar",
     "loader",
     "streaming",
-    "range-requests",
-    "las",
-    "brotli"
+    "range-requests"
   ],
   "repository": {
     "type": "git",
@@ -33,21 +30,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./brotli": {
-      "types": "./dist/brotli/index.d.ts",
-      "import": "./dist/brotli/index.js"
-    }
-  },
-  "imports": {
-    "#brotli-native": {
-      "node": "./dist/point-data-brotli-node.js",
-      "default": "./dist/point-data-brotli-none.js"
     }
   },
   "files": [
-    "dist",
-    "THIRD-PARTY-NOTICES.md"
+    "dist"
   ],
   "scripts": {
     "build": "tsup",
@@ -56,7 +42,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@voxelkloud/core": "^0.1.0"
+    "@voxelkloud/core": "workspace:*",
+    "@voxelkloud/format-potree": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",

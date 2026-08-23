@@ -1,54 +1,67 @@
 # @voxelkloud/loader
 
-Streaming loader for Potree v2 point clouds. No three, no DOM, no GPU in its
-module graph, so it runs in a browser, a worker, or Node — for rendering,
-inspection, or conversion.
+The engine: it identifies which format a URL is, and hands off to that driver.
+No three and no DOM in its module graph, so it runs in a worker or in Node.
 
 ```sh
 npm install @voxelkloud/loader
 ```
 
 ```ts
-import { loadHierarchy, loadPointCloudSource } from "@voxelkloud/loader";
+import { loadPointCloud } from "@voxelkloud/loader";
 
-const source = await loadPointCloudSource("https://example.com/clouds/autzen/");
-source.metadata.points;    // 10653336
-source.attributes;         // name, type, numElements, min/max, role
-source.warnings;           // tolerated anomalies, collected instead of thrown
-
-const hierarchy = await loadHierarchy(source);
-await hierarchy.expandAll();
+const { source, tree, format } = await loadPointCloud(url);
+format.id;                 // "potree-v2"
+source.pointCount;         // 10653336
+source.tightBoundingBox;   // absolute CRS
 ```
 
-Both encodings. `DEFAULT`'s interleaved stride and `BROTLI`'s planar 47 B/pt
-blocks with morton-coded positions and colour.
+The returned source satisfies `PointCloudSourceBase` whichever driver served it.
+Reach for a driver's own fields only when you have decided to be
+format-specific.
 
-Positions come out float32 RELATIVE to the cloud origin, because absolute
-float32 loses 0.030 m on autzen — three times the file's own quantum. Pass
-`positionFormat: "int32"` for exact values.
+## How it decides
 
-Hierarchy fetching is EAGER BYTES, LAZY TREE by default: one unranged GET of
-the whole `hierarchy.bin` (100 KB raw, 38 KB on the wire for autzen, against 192
-Range requests), with only the root chunk materialised. Every later expansion is
-a synchronous slice, so descent costs no frames. `prefetch: "never"` switches to
-the streaming path.
+Drivers are ordered by `sniffUrl`, which is URL shape only and costs nothing.
+Each candidate then names the document that would identify it —
+`metadata.json` for Potree, `ept.json` for EPT — and those are fetched, **once
+each even when several drivers name the same one**, until a driver reports
+decisive confidence. That document is handed to the winning driver, so
+identification never costs a duplicate round trip.
 
-### BROTLI clouds
+A 404 on one candidate is an answer, not a failure: it is how "not this format"
+presents. When nothing matches, the thrown `"unsupported-format"` names what was
+tried and what the server actually served.
 
-No browser exposes a brotli decompressor to JS, so those clouds need the opt-in
-decoder:
+Pass `format: "potree-v2"` to skip sniffing entirely — use it when the format is
+known and a wrong guess should be an error rather than a fallback.
+
+## Drivers
+
+`@voxelkloud/format-potree` is registered on the first load, so zero-config
+keeps working. That is a DX decision, not a structural one. The other drivers
+are separate packages and are NOT registered by default, because each pulls in a
+wasm LAZ decoder and an app that reads one format should not bundle another's
+codec to find that out:
 
 ```ts
-const { brotliDecompress } = await import("@voxelkloud/loader/brotli");
+import { formats } from "@voxelkloud/loader";
+import { copcFormat } from "@voxelkloud/format-copc";
+import { eptFormat } from "@voxelkloud/format-ept";
+
+formats.register(copcFormat).register(eptFormat);
+formats.unregister("potree-v2");
 ```
 
-A separate subpath on purpose — the vendored decoder must never land in a bundle
-that does not need it. Node finds `zlib` on its own.
+Once registered, the URL decides. `loadPointCloud` returns the driver that
+claimed it, the source, the tree, and `openPoints` — a factory for the reader
+that turns a node into vertices, which is the last thing that stays
+format-specific:
 
-Every failure is one `VoxelkloudError` with a `code` you switch on, plus `path`,
-`url` and `status`. Use `isVoxelkloudError`, not `instanceof`.
+```ts
+const { format, source, tree, openPoints } = await loadPointCloud(url);
+format.id; // "potree-v2" | "copc" | "ept"
+view.addCloud(source, tree, openPoints);
+```
 
-Full documentation: [voxelkloud](https://github.com/voxelkloud/voxelkloud).
-
-MIT. Vendors the Brotli Authors' reference decoder; see
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+MIT.
