@@ -1,6 +1,6 @@
 {
   "name": "@voxelkloud/loader",
-  "version": "0.2.1",
+  "version": "0.5.0",
   "description": "Streaming point cloud loader over HTTP Range requests. No three.js and no DOM in its module graph, so it runs in a worker or in Node.",
   "license": "MIT",
   "keywords": [
